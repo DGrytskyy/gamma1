@@ -1,0 +1,683 @@
+import numpy as np
+import matplotlib.pyplot as pl
+import cv2
+import PIL.Image as Im
+import PIL
+from PIL import EpsImagePlugin
+EpsImagePlugin.gs_windows_binary =r'C:\Program Files\LyX 2.3\ghostscript\bin\gswin64.exe' 
+import matplotlib.pyplot as pl
+
+N=5#12
+Ns=N**2
+F=1#20#25#7#12
+gamma=0.98
+g=1./gamma
+#itst=0.002
+nz=0.#0.12#0.27
+uhas=0
+Na=9
+food=np.zeros((N,N),int)
+#food[0,0]=F-1
+#food[N-1,N-1]=F-1
+
+fl=1#4#N//2-2
+food[fl,1]=F#-1
+#food[N-1-fl,1]=F#-1
+
+#food+=1
+form=np.zeros((2,N,N),int)
+#form+=1
+
+form[0,0:N,0:N]=1
+#form[0,0:3,0:3]=1
+#form[0,N-3:N,0:3]=1
+#form[0,3:N-3,1]=1
+#form[0,3:N,1]=1
+
+#form[1,N-1,N-1]=1
+form[1,:,:]=0
+
+food=food*form[0]
+
+food=form[0]
+print("food",food)
+
+T=12
+Titer=2
+
+Form=np.ones((F,Ns))
+FormQ=np.ones((F,Ns))
+
+for i in range(Ns):
+        Form[:,i]=form[0,i//N,i%N]		
+        FormQ[:,i]=form[0,i//N,i%N]
+
+def stopos(s):
+    f=s//N**4
+    s=s%N**4
+    s1=s//(N**2)
+    s2=s%(N**2)
+    a=np.zeros(5, int)
+    a[0]=f
+    a[1]=s1//N
+    a[2]=s1%N
+    a[3]=s2//N
+    a[4]=s2%N
+    return a
+
+def postos(a):
+    s=(N*a[1]+a[2])*N**2+(N*a[3]+a[4])+a[0]*N**4
+    return s
+
+def ifa(s,a,ind):
+	pos=stopos(s)
+	pos[ind]+=a//3-1
+	pos[ind+1]+=a%3-1
+	w=0
+	if (pos[ind]<N) and (pos[ind]>=0) and (pos[ind+1]<N) and (pos[ind+1]>=0):
+		if (form[(ind-1)//2,pos[ind],pos[ind+1]]==1): 
+			w=1
+	return w
+
+
+def nexts(s,a):
+    pos=stopos(s)
+    pos0=np.zeros((5), int)
+    for i in range(5):
+        pos0[i]=pos[i]
+    lists=[]
+    listp=[]
+    if (pos[0]==-1): #or ((pos[1]==pos[3]) and (pos[2]==pos[4])):
+        pos[0]=-1
+    else:
+        pos[0]=pos[0]-1+food[pos[1],pos[2]]
+        if (pos[0]>=F):
+            pos[0]=F-1
+        if (pos[0]>=0):
+            pos[1]=(pos[1]+a//3-1)#%N
+            pos[2]=(pos[2]+a%3-1)#%N
+            if pos[1]<0:
+                pos[1]=0
+            if pos[1]>N-1:
+                pos[1]=N-1
+            if pos[2]<0:
+                pos[2]=0
+            if pos[2]>N-1:
+                pos[2]=N-1
+    pos1=np.zeros((5), int)
+    for i in range(5):
+        pos1[i]=pos[i]
+    for a2 in range(1):#9
+        #if (ifa(s,a2,3)==1):
+        #   pos1[3]=(pos[3]+a2//3-1)#%N
+        #   pos1[4]=(pos[4]+a2%3-1)#%N
+           lists.append(postos(pos1))
+           listp.append(1.)#wp[pos0[1]*N+pos0[2],pos0[3]*N+pos0[4],pos1[3]*N+pos1[4] ])
+    return lists,listp
+
+def W01(pos,pos1):
+    w=0
+    if (pos[0]==0) and (pos!=pos1):
+        w=0
+    else:
+        if (pos[0]-1+food[pos[1],pos[2]]==pos1[0]) and (abs(pos[1]-pos1[1])<=1) and (abs(pos[2]-pos1[2])<=1):
+            w=1
+    return w
+
+def W2(pos,pos1):
+    w=0
+    if (abs(pos[1]-pos1[1])<2) and (abs(pos[2]-pos1[2])<2):
+            w=1
+    return w
+
+def Wnum(pos,pos1):
+    w=0
+    if (abs(pos//N-pos1//N)<2) and (abs(pos%N-pos1%N)<2) and (form[0,pos1//N,pos1%N]==1) and (form[0,pos//N,pos%N]==1):
+            w=1
+    return w
+
+def Wnum2(pos,pos1):
+    w=0
+    if (abs(pos//N-pos1//N)<2) and (abs(pos%N-pos1%N)<2) and (form[1,pos1//N,pos1%N]==1) and (form[1,pos//N,pos%N]==1):
+            w=1
+    return w
+
+beta=2.
+miop=0
+def Wp(pos1,pos2):
+	wp=np.zeros((3,3))
+	l=np.sqrt((pos1//N-pos2//N)**2+(pos1%N-pos2%N)**2)
+	if (l>0):
+		for i in range(3):
+			for j in range(3):
+				wp[i,j]=(i-1)*(pos1//N-pos2//N)+(j-1)*(pos1%N-pos2%N)
+				if (abs(i-1)==1) and (abs(j-1)==1):
+					wp[i,j]*=1./np.sqrt(2)
+		wp*=1./l#*1./l#**2
+		if (miop==1):
+			if (l>1):
+				wp*=1./l
+	#wp+=(1.-sum(wp))/9.
+	#print("wp",wp)
+	wpmax=np.amax(wp)
+	wp-=wpmax
+	wpsum=0
+	for i in range(3):
+		for j in range(3):
+			wp[i,j]=np.exp(beta*wp[i,j])
+			wpsum+=wp[i,j]
+	#wpsum=sum(wp)
+	wp*=1./wpsum
+	#print("wp_exp",wp)
+	return wp
+        
+uload=0
+usafe=1
+uvideo=0
+urecload=0
+Viter=1000
+nalpha=11
+nbet=14
+nT=1
+bet0=0.05
+alpha0=0.05
+betm=bet0+(nbet-1)*0.01
+alpham=alpha0+(nalpha-1)*0.01
+arf=np.zeros((nbet))
+rev_av=np.zeros((nalpha,nbet))
+for iT in range(nT):
+    T=6+2*iT
+    for ialpha in range(nalpha):
+        for ibet in range(nbet):
+            alpha=alpha0+ialpha*0.01
+            bet=bet0+ibet*0.01
+            #bet=max(0.04,alpha-0.04)+ibet*0.01#0.04+ibet*0.01
+            zpos=np.ones((F,N*N))*1.#,N*N
+            zpos1=np.ones((F,N*N))*1.#,N*N
+            zposfin=np.ones((F,N*N))*1.#,N*N
+            lnz=np.zeros((N*N))*1.#,N*N
+            v=np.zeros((F,N*N))*1.#,N*N
+            dv=np.zeros((F,N*N))*1.#,N*N
+            vfin=np.zeros((F,N*N))*1.#,N*N
+            zaf=np.zeros((F,N*N))*1.#,N*N
+            Q1=np.ones((F,N*N))*1.#,N*N
+            Q=np.ones((F,N*N))*1.#,N*N
+            za=np.zeros((N*N))
+            zap=np.zeros((N*N))
+            qas0=np.zeros((N**2,N**2,F))
+            qs0=np.zeros((N**2,F))
+            weff=np.zeros((N**2,N**2,F))
+            w1=np.zeros((N**2,N**2))
+            w2=np.zeros((N**2,N**2))
+            w01=np.zeros((N**2,N**2))
+            w=np.zeros((N**4,N**4))
+            r=np.zeros((N**2,N**2))
+            rwall=-10.#-5.#0.
+            r[:,0]=10.
+            r[:,6]=rwall
+            r[:,7]=rwall
+            r[:,8]=rwall
+            r[:,12]=rwall
+            r[:,17]=rwall
+            #r[:,11]=rwall
+            #r[:,13]=rwall
+            #r[:,16]=rwall
+            #r[:,18]=rwall
+            R=np.zeros((N**2))
+            for i in range(N**2):
+                R[i]=r[i,i]
+            for i in range(N**2):
+                for j in range(N**2):
+                    w1[i,j]=Wnum(i,j)
+                    w2[i,j]=Wnum2(i,j)
+                    w01[i,j]=Wnum(i,j)
+                w01[i,i]=0
+
+            #circle reset
+            for i in range(N-1):
+                w1[:,i]=0
+                w1[i+1,i]=1
+            #w1[N-1,N-2]=0
+
+
+            for i in range(N**2):
+                if R[i]<0:
+                    form[1,i//N,i%N]=1
+
+            for i in range(N**2):
+                for j in range(N**2):
+                    for f in range(F):
+                        if Form[f,j]==1:
+                            qas0[i,j,f]=w1[i,j]/sum(w1[:,j])
+                            qs0[j,f]=sum(w1[:,j])/np.sum(w1)
+
+            print("qas0,qs0",qas0,qs0)
+
+            wp0=np.zeros((N**2,N**2))
+            for j in range(N**2):
+                k=0
+                for i1 in range(3):
+                    for j1 in range(3):
+                        if (j//N+i1-1>=0) and (j//N+i1-1<N) and (j%N+j1-1>=0) and (j%N+j1-1<N):
+                            wp0[j,(j//N+i1-1)*N+j%N+j1-1]=1.
+                            k+=1
+                wp0[j]*=1./k
+
+            wp=np.zeros((N**2,N**2,N**2))
+            for i in range(N**2):
+                for j in range(N**2):
+                    if form[1,j//N,j%N]==1:
+                        wploc=Wp(i,j)
+                        sumloc=0.
+                        for i1 in range(3):
+                            for j1 in range(3):
+                                i11=j//N+i1-1
+                                j11=j%N+j1-1
+                                if (j11>=0) and (j11<N) and (i11>=0) and (i11<N):
+                                    wploc[i1,j1]*=w2[j,i11*N+j11]
+                                    sumloc+=wploc[i1,j1]
+                        for i1 in range(3):
+                            for j1 in range(3):
+                                i11=j//N+i1-1
+                                j11=j%N+j1-1
+                                if (j11>=0) and (j11<N) and (i11>=0) and (i11<N):
+                                    wp[i,j,i11*N+j11]=wploc[i1,j1]/sumloc
+
+
+            #print("wp0",wp0)
+            wp0=wp[0]
+            #print("wp[0]",wp[0])
+
+
+            dist=np.ones((N**2,N**2),int)
+            dist*=-1
+            for i in range(N**2):
+                for j in range(N**2):
+                    if (form[0,i//N,i%N]==1) and (form[1,j//N,j%N]==1) and (form[1,i//N,i%N]==1):
+                        if (abs(i//N-j//N)<=1) and (abs(i%N-j%N)<=1):
+                            dist[i,j]=1
+                        if (i==j):
+                            dist[i,j] = 0
+        
+            for k in range(N**2):
+                for i in range(N**2):
+                    for j in range(N**2):
+                        if  (dist[i,k]>=0 and dist[k,j]>=0) and ( dist[i,j]<0  or dist[i,j] > dist[i,k] + dist[k,j]):
+                            dist[i,j] = dist[i,k] + dist[k,j]
+            #print("dist")
+            #for i in range(N**2):
+            #    print(dist[i])
+            dhist=np.zeros(np.amax(dist)+2,int)
+
+            hwp=np.zeros((N**2,N**2))
+            lnwp=np.zeros((N**2,N**2))
+            #print("hwp")
+            for i in range(N**2):
+                for j in range(N**2):
+                    for k in range(N**2):
+                        if (wp[i,j,k]>0):
+                            lnwp[j,k]=np.log(wp[i,j,k])
+                        else:
+                            lnwp[j,k]=-100.
+                    hwp[i,j]=-np.dot(wp[i,j],lnwp[j])
+	
+
+
+
+            pref="KLs_ziter_zformedW_nofood1_reward_Twall_fulltank "#"hs_ziter_zformedW_2rooms1bridge_fulltank "
+            postf="N"+str(N)+"F"+str(F)+"fl"+str(fl)+"beta"+str(beta)+"miop"+str(miop)+"nz"+str(nz)+"gamma"+str(gamma)+"alpha"+str(round(alpha*100)*0.01)+"bet"+str(round(bet*100)*0.01)+"r0_"+str(r[0,0])+"firewall"+str(rwall)
+            pref+=postf+"has"+str(uhas)+"T"+str(T)+"Titer"+str(Titer)
+            ledy=np.zeros(T)
+            dledy=np.zeros(T)
+            mady=np.zeros(T)
+            dmady=np.zeros(T)
+            Qmady=np.zeros(T)
+            q0mady=np.zeros(T)
+            Z0dy=np.zeros(T)
+            Z0=0.
+            w1f=np.zeros((N**2,N**2,F))
+            wer=np.zeros((N**2))
+            for f in range(F):
+                w1f[:,:,f]=w1[:,:]
+            if (uload==0):
+
+                if alpha>bet:
+                    normpot=(alpha/bet-1.)
+                    #zpos[F-1,fl*N+1]=1.#fix one finite V
+                else:
+                    #iterpot=bet/(bet+alpha)
+                    normpot=0.
+                iterpot=1./(1.+alpha/bet+normpot)
+                #fc=np.ones((F,N**2))
+                #for i in range(N**2):
+                #        fc[F-1,i]=food[i//N,i%N]
+
+                print("checkQ0")
+                checkQ=np.zeros((F,Ns))
+                for f in range(F):
+                    for i in range(Ns):
+                        f2=min(F-1,f-1+food[i//N,i%N])
+                        checkQ[f,i]=zpos[f,i]*np.dot(w1[i],Q[f])
+                        if f2>=0:
+                            checkQ[f,i]+=-(Q1[f2,i]/zpos[f,i])**(alpha/bet)
+                    print(checkQ[f])
+                #pl.plot(ledy)
+                #pl.show()
+                print("zpos0",zpos)
+                for i in range(N**2):
+                    for j in range(N**2):
+                        for f in range(F):
+                            #f2=min(F-1,f-1+food[i//N,i%N])
+                            weff[i,j,f]=w1[i,j]*qas0[i,j,f]*qs0[j,f]**(bet/alpha)#*np.exp(r[i,j]/alpha)
+                print("weff")
+                for f in range(F):
+                    for i in range(N**2):
+                        print(weff[:,i,f])
+
+                for t in range(T):
+
+
+                    #zaf=np.exp(v*1./alpha)
+                    zaf[:]=zpos[:]
+                    #print("zaf",zaf)
+                    if (t%Titer==0) and (t>0):
+                        for i in range(N**2):
+                            for f in range(F):
+                                for j in range(N**2):
+                                    f2=min(F-1,f-1+food[i//N,i%N])
+                                    #print("i,j,f,f2",i,j,f,f2)
+                                    qas0[j,i,f]*=zaf[f2,j]/zaf[f,i]*np.exp(r[j,i]/alpha)
+                                    #weff[j,i,f]*=(zaf[f2,j]/zaf[f,i])**alpha
+                                qs0[i,f]*=sum(qas0[:,i,f])**(alpha/bet)
+                                qas0[:,i,f]*=1./sum(qas0[:,i,f])
+                                print("sum_qas0",sum(qas0[:,i,f]),i,f)
+                        #for i in range(N**2):
+                            #for f in range(F):
+                        Z0=sum(qs0)#*q
+                        qs0*=1./Z0
+                        #weff*=1./Z0**(bet/alpha)
+                        print("weff_tilde",weff)
+                        print("Z0",Z0)
+                        print("sumqs0",sum(qs0))
+
+                        for i in range(N**2):
+                            for j in range(N**2):
+                                for f in range(F):
+                                    #f2=min(F-1,f-1+food[i//N,i%N])
+                                    weff[i,j,f]=w1[i,j]*qas0[i,j,f]*qs0[j,f]**(bet/alpha)#*np.exp(r[i,j]/alpha)
+                        print("weff",weff)
+
+                    Z0dy[t]=Z0
+                    Q1[f]=np.dot(zaf[f],weff[:,:,f])#checkF!
+                    print("Q1")
+                    for f in range(F):
+                        print(Q1[f])
+                    Q=np.zeros((F,N*N))
+                    for i in range(N**2):
+                        for f in range(F):
+                            f00=f+1-food[i//N,i%N]
+                            u=1
+                            if (f==F-1):
+                                f01=f
+                            else:
+                                f01=f00
+                            for f0 in range(f00,f01+1):
+                                if (f0>=0) and (f0<F) and (Form[f0,i]==1):
+                                    u*=0
+                            if u==1:
+                                FormQ[f,i]=0
+                            else:
+                                FormQ[f,i]=1
+                    print("FormQ",FormQ)
+                    for i in range(N**2):
+                        for f in range(F):
+                            if form[0,i//N,i%N]==1:
+                                if Q1[f,i]>0:
+                                    Q[f,i]=Q1[f,i]**(alpha/bet-1)
+                                f00=f+1-food[i//N,i%N]
+                                u=1
+                                if (f==F-1):
+                                    f01=f
+                                else:
+                                    f01=f00
+                                m=0.
+                                for f0 in range(f00,f01+1):
+                                    if (f0>=0) and (f0<F) and (Form[f0,i]!=0):
+                                        if (np.dot(w1[i],FormQ[f0])>0):
+                                            u*=0
+                                            if (Q[f,i]>0):
+                                                m+=(qs0[i,f0]/qs0[i,f00])**bet*zpos[f0,i]**(-alpha/bet) #Q[f,i]*=zpos[f0,i]**(-alpha/bet)
+                                        else:
+                                            #Q[f,i]*=0.
+                                            Form[f0,i]=0
+                                            zpos[f0,i]=0.
+                                    #else:
+                                        #Q[f,i]*=0.
+                                if u==1:
+                                    Q[f,i]*=0.
+                                else:
+                                    Q[f,i]*=m
+                    #print("Q",Q)
+
+                    print("t,Form",t)
+                    #for f in range(F):
+                    #    print(zpos[f])#v
+                    for f in range(F):
+                        print(Form[f])
+                    for i in range(N**2):
+                        if form[0,i//N,i%N]==1:
+                            for f in range(F):
+                                if Form[f,i]==1:
+                                    f2=min(F-1,f-1+food[i//N,i%N])
+                                    f00=f+1-food[i//N,i%N]
+                                    if f2>=0:
+                                        if np.dot(w1[i],Q[f])>0:#ADD_wer
+                                            wer[:]=weff[i,:,f00]
+                                            #dr=R[:]-R[i]
+                                            #wer=wer*np.exp(dr/bet)
+                                            wer=wer*np.exp(R[:]/bet)
+                                            wer*=np.exp(-R[i]/bet)
+                                            zpos[f,i]=Q1[f2,i]**(alpha/bet)/np.dot(wer,Q[f])  *zaf[f,i]**normpot      #Q1=np.dot(zaf[f2,:],w1[i])
+                                            zpos[f,i]=zpos[f,i]  **iterpot#**(bet/(bet+alpha))
+                                        else:
+                                            zpos[f,i]=0.#10.**10
+                                    else:
+                                        zpos[f,i]=0.
+                                        #zpos[f,i]=zaf[f,i]**(alpha/bet)/(np.dot(w1[i],Q[f])+zaf[f,i])
+                                        #zpos[f,i]=zpos[f,i]**(bet/(bet+alpha))
+
+                    #if alpha>bet:
+                    #    zpos[F-1,fl*N+1]=1.#fix one finite V
+                    zpos[0,1]=1.
+    
+                    #print("zaf*w1",np.dot(zaf,w1))
+                    #norm=np.prod(zpos)**(-1./sum(sum(Form)))
+                    norm=1.
+                    normc=0
+                    for i in range(N**2):
+                        for f in range(F):
+                            if (Form[f,i]==1) and (zpos[f,i]>0):#form[0,i//N,i%N]==1:
+                                norm*=zpos[f,i]
+                                normc+=1
+                    print("prod_nonorm",norm,normc)
+                    #norm=norm**(-1./normc)
+                    #for i in range(N**2):
+                    #    for f in range(F):
+                    #        if (Form[f,i]==1) and (zpos[f,i]>0):#form[0,i//N,i%N]==1:
+                    #            zpos[f,i]*=norm
+                    #print("check_norm",sum(sum(v)))
+                    #print("check_norm",np.prod(zpos))
+                    ledy[t]=zpos[F-1,0]
+                    mady[t]=np.amax(zpos*Form)
+                    q0mady[t]=np.amax(qas0[N:,:,:])#*w1f)
+                    checkQ=np.zeros((F,Ns))
+                    for f in range(F):
+                        for i in range(Ns):
+                            if zpos[f,i]>0:
+                                f2=min(F-1,f-1+food[i//N,i%N])
+                                f00=f+1-food[i//N,i%N]
+                                checkQ[f,i]=zpos[f,i]*np.dot(weff[i,:,f00],Q[f])
+                                if f2>=0:
+                                    checkQ[f,i]+=-(Q1[f2,i]/zpos[f,i])**(alpha/bet)
+                                checkQ[f,i]=abs(checkQ[f,i])
+
+                    #checkQ[F-1,fl*N+1]=0.
+                    Qmady[t]=np.amax(checkQ*FormQ)
+
+                    print("t,z",t)
+                    for f in range(F):
+                        print(zpos[f])
+                    print("t,Q",t)
+                    for f in range(F):
+                        print(Q[f])
+
+                    if t==T-2:
+                        #print("dv/v")
+                        for f in range(F):
+                            #vfin[f]=v[f]
+                            #print(dv[f]/v[f])
+                            zposfin[f]=zpos[f]
+                #zposfin=np.exp(vfin*1./alpha)
+                #zpos=np.exp(v*1./alpha)
+                print("zposfin")
+                for f in range(F):
+                    print("f ",f)
+                    print(zposfin[f])
+                    #for i in range(N**2):
+                    #    print(zposfin[f,i])
+                print("zposfin-zpos")
+                for f in range(F):
+                    print("f ",f)
+                    print(zposfin[f]-zpos[f])
+                print("zposfin/zpos")
+                for f in range(F):
+                    print("f ",f)
+                    print(zposfin[f]/zpos[f])
+                print("checkQ")
+                checkQ=np.zeros((F,Ns))
+                for f in range(F):
+                    for i in range(Ns):
+                        f2=min(F-1,f-1+food[i//N,i%N])
+                        f00=f+1-food[i//N,i%N]
+                        checkQ[f,i]=zpos[f,i]*np.dot(weff[i,:,f00],Q[f])
+                        if f2>=0:
+                            checkQ[f,i]+=-(Q1[f2,i]/zpos[f,i])**(alpha/bet)
+                    print(checkQ[f])
+
+
+                if (usafe==1):
+                    file = open(pref, "wb")
+                    np.save(file, zposfin)
+                    file.close
+            else:
+                file = open(pref, "rb")
+                zposfin = np.load(file)
+                file.close
+                print("zposfin")#,zposfin)
+                for f in range(F):
+                    print(zposfin[f])
+
+            print("alpha,bet",alpha,bet)
+            ps=np.zeros((F,Ns))
+            ps2=np.zeros((F,Ns))
+            pas=np.zeros((F,Ns,Ns))
+            F2=np.zeros((F,Ns),int)
+            Z=0.
+            Q1=np.dot(zposfin,w1)
+            for f in range(F):
+                    for i in range(Ns):
+                        if zposfin[f,i]>0:
+                            f2=min(F-1,f-1+food[i//N,i%N])
+                            if f2>=0:
+                                F2[f,i]=f2
+                                for j in range(Ns):
+                                    pas[f,i,j]=w1[i,j]*zposfin[f2,j]/Q1[f2,i]
+                                ps[f,i]=(Q1[f2,i]/zposfin[f,i])**(alpha/bet)
+                            else:
+                                ps[f,i]=1.
+                                pas[f,i,i]=1.
+                        else:
+                                ps[f,i]=1.
+                                pas[f,i,i]=1.
+                        Z+=ps[f,i]
+
+            print("Z",Z)
+            ps*=1./Z
+            for f in range(F):
+                    for i in range(Ns):
+                        for j in range(Ns):
+                            ps2[F2[f,i],j]+=pas[f,i,j]*ps[f,i]
+            checkps=ps-ps2
+            print("checkps",checkps)
+            print("max_checkps",np.amax(abs(checkps)))
+            print("max_ps",np.amax(ps))
+
+            #pl.plot(ledy)
+            #pl.show()
+            #pl.plot(mady)
+            #pl.show()
+            #pl.plot(q0mady)
+            #pl.show()
+            #pl.plot(Qmady)
+            #pl.show()
+            #pl.plot(Z0dy)
+            #pl.show()
+
+
+            pi=np.zeros((F*N**2,Na))
+            for i in range(F*N**2): 
+                pa=np.zeros(Na)*1.
+                s=i*N**2+(N-1)**2#cat at corner
+                for a in range(Na):
+                    if ifa(s,a,1)==1:
+                           z2=1.
+                           ls,ps=nexts(s,a)
+                           for j in range(len(ls)):
+                                s2=ls[j]
+                                p2=ps[j]
+                                z2*=(qas0[(s2%N**4)//N**2,(s%N**4)//N**2,s//N**4]*np.exp(r[(s2%N**4)//N**2,(s%N**4)//N**2]/alpha)*zposfin[s2//N**4,(s2%N**4)//N**2])**p2
+                           pa[a]=z2
+                zsum=sum(pa)
+                if zsum>0:
+                    pa*=1./zsum
+                pi[i,:]=pa[:]
+
+            print("pi",pi)
+
+            v=np.zeros((F*N**2))
+            for i in range(F*N**2): 
+                v[i]=R[i]
+            for iter in range(Viter):
+                v2=np.zeros((F*N**2))
+                for i in range(F*N**2): 
+                    v2[i]=R[i]
+                    pa=np.zeros(Na)*1.
+                    pa[:]=pi[i,:]
+                    s=i*N**2+(N-1)**2#cat at corner
+                    for a in range(Na):
+                        if ifa(s,a,1)==1:
+                            ls,ps=nexts(s,a)
+                            val=np.zeros((len(ls)))
+                            for j in range(len(ls)):
+                                val[j]=v[ls[j]//N**2]
+                            v2[i]+=pa[a]*np.dot(ps,val)
+                v[:]=v2[:]
+            v*=1./Viter
+            print("T,alpha,bet,v",T,alpha,bet,v) 
+            rev_av[ialpha,ibet]=v[(N-1)**2]  
+            arf[ibet]=bet           
+
+        file = open("rev_av_valit_"+str(Viter)+"_"+pref+"arg"+str(bet0)+"_"+str(betm), "wb")
+        np.save(file, rev_av[ialpha])
+        file.close
+
+        col=str(0.9*ialpha/nalpha)
+        pl.plot(arf,rev_av[ialpha], color=col)
+
+    file = open("rev_av_valit_"+str(Viter)+"_"+pref+"arg1_"+str(alpha0)+"_"+str(alpham)+"_"+str(nalpha)+"arg2_"+str(bet0)+"_"+str(betm)+"_"+str(nbet), "wb")
+    np.save(file, rev_av)
+    file.close
+
+    pl.xlabel(r'$\beta$',size=20)#r'$\beta$'
+    pl.ylabel('r',size=20)
+    pl.show()

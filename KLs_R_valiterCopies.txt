@@ -1,0 +1,446 @@
+import numpy as np
+import cv2
+import PIL.Image as Im
+import PIL
+from PIL import EpsImagePlugin
+EpsImagePlugin.gs_windows_binary =r'C:\Program Files\LyX 2.3\ghostscript\bin\gswin64.exe' 
+import turtle
+turtle.ht()
+
+N=5#12
+Ns=N**2
+F=1#20#25#7#12
+gamma=0.99
+g=1./gamma
+alpha=0.06#1.
+bet=0.06#1.#alpha#10./
+#itst=0.0
+nz=0.#02#0.12#0.27
+uhas=0
+Na=9
+food=np.zeros((N,N),int)
+#food[0,0]=F-1
+#food[N-1,N-1]=F-1
+
+fl=1#4#N//2-2
+food[fl,1]=F#-1
+#food[N-1-fl,1]=F#-1
+
+#food+=1
+form=np.zeros((2,N,N),int)
+#form+=1
+
+form[0,0:N,0:N]=1
+#form[0,0:3,0:3]=1
+#form[0,N-3:N,0:3]=1
+#form[0,3:N-3,1]=1
+#form[0,3:N,1]=1
+
+form[1,N-1,N-1]=1
+
+food=food*form[0]
+
+r=np.zeros((N**2,N**2))
+rw=-10.
+r[:,0]=10.
+r[:,6]=rw
+r[:,7]=rw
+r[:,8]=rw
+r[:,12]=rw
+r[:,17]=rw
+R=np.zeros((N**2))
+for i in range(N**2):
+    R[i]=r[i,i]	
+print("R",R)		
+
+def stopos(s):
+    f=s//N**4
+    s=s%N**4
+    s1=s//(N**2)
+    s2=s%(N**2)
+    a=np.zeros(5, int)
+    a[0]=f
+    a[1]=s1//N
+    a[2]=s1%N
+    a[3]=s2//N
+    a[4]=s2%N
+    return a
+
+def postos(a):
+    s=(N*a[1]+a[2])*N**2+(N*a[3]+a[4])+a[0]*N**4
+    return s
+
+def ifa(s,a,ind):
+	pos=stopos(s)
+	pos[ind]+=a//3-1
+	pos[ind+1]+=a%3-1
+	w=0
+	if (pos[ind]<N) and (pos[ind]>=0) and (pos[ind+1]<N) and (pos[ind+1]>=0):
+		if (form[(ind-1)//2,pos[ind],pos[ind+1]]==1): 
+			w=1
+	return w
+
+def q0(i,j):
+	return R[i]
+
+def nexts(s,a):
+    pos=stopos(s)
+    pos0=np.zeros((5), int)
+    for i in range(5):
+        pos0[i]=pos[i]
+    lists=[]
+    listp=[]
+    if (pos[0]==-1):# or ((pos[1]==pos[3]) and (pos[2]==pos[4])):
+        pos[0]=-1
+    else:
+        pos[0]=pos[0]#-1+food[pos[1],pos[2]]
+        if (pos[0]>=F):
+            pos[0]=F-1
+        if (pos[0]>=0):
+            pos[1]=(pos[1]+a//3-1)#%N
+            pos[2]=(pos[2]+a%3-1)#%N
+            if pos[1]<0:
+                pos[1]=0
+            if pos[1]>N-1:
+                pos[1]=N-1
+            if pos[2]<0:
+                pos[2]=0
+            if pos[2]>N-1:
+                pos[2]=N-1
+    pos1=np.zeros((5), int)
+    for i in range(5):
+        pos1[i]=pos[i]
+    for a2 in range(1):#9
+        #if (ifa(s,a2,3)==1):
+           #pos1[3]=(pos[3]+a2//3-1)#%N
+           #pos1[4]=(pos[4]+a2%3-1)#%N
+           lists.append(postos(pos1))
+           listp.append(wp[pos0[1]*N+pos0[2],pos0[3]*N+pos0[4],pos1[3]*N+pos1[4] ])
+    return lists,listp
+
+def W01(pos,pos1):
+    w=0
+    if (pos[0]==0) and (pos!=pos1):
+        w=0
+    else:
+        if (pos[0]-1+food[pos[1],pos[2]]==pos1[0]) and (abs(pos[1]-pos1[1])<=1) and (abs(pos[2]-pos1[2])<=1):
+            w=1
+    return w
+
+def W2(pos,pos1):
+    w=0
+    if (abs(pos[1]-pos1[1])<2) and (abs(pos[2]-pos1[2])<2):
+            w=1
+    return w
+
+def Wnum(pos,pos1):
+    w=0
+    if (abs(pos//N-pos1//N)<2) and (abs(pos%N-pos1%N)<2) and (form[0,pos1//N,pos1%N]==1) and (form[0,pos//N,pos%N]==1):
+            w=1
+    return w
+
+def Wnum2(pos,pos1):
+    w=0
+    if (abs(pos//N-pos1//N)<2) and (abs(pos%N-pos1%N)<2) and (form[1,pos1//N,pos1%N]==1) and (form[1,pos//N,pos%N]==1):
+            w=1
+    return w
+
+beta=2.
+miop=0
+def Wp(pos1,pos2):
+	wp=np.zeros((3,3))
+	l=np.sqrt((pos1//N-pos2//N)**2+(pos1%N-pos2%N)**2)
+	if (l>0):
+		for i in range(3):
+			for j in range(3):
+				wp[i,j]=(i-1)*(pos1//N-pos2//N)+(j-1)*(pos1%N-pos2%N)
+				if (abs(i-1)==1) and (abs(j-1)==1):
+					wp[i,j]*=1./np.sqrt(2)
+		wp*=1./l
+		if (miop==1):
+			if (l>1):
+				wp*=1./l
+	wpmax=np.amax(wp)
+	wp-=wpmax
+	wpsum=0
+	for i in range(3):
+		for j in range(3):
+			wp[i,j]=np.exp(beta*wp[i,j])
+			wpsum+=wp[i,j]
+	wp*=1./wpsum
+	#print("wp_exp",wp)
+	return wp
+        
+
+w1=np.zeros((N**2,N**2))
+w2=np.zeros((N**2,N**2))
+w=np.zeros((N**4,N**4))
+w1l=np.zeros((N*N,Na),int)
+w1a=np.zeros((N*N,Na),int)
+w1ll=np.zeros((N*N),int)
+for i in range(N**2):
+    for j in range(N**2):
+        w1[i,j]=Wnum(i,j)
+        w2[i,j]=Wnum2(i,j)
+
+
+#circle reset
+for i in range(N-1):
+	w1[i,:]=0
+	w1[i,i+1]=1 
+
+for i in range(N**2):
+    for j in range(N**2):
+        if w1[i,j]==1:
+            w1l[i,w1ll[i]]=j
+            w1a[i,w1ll[i]]=(j//N-i//N+1)*3+(j%N-i%N+1)
+            w1ll[i]+=1
+
+print("w1",w1)        
+print("w1l",w1l)
+print("w1ll",w1ll)
+print("w1a",w1a)
+
+
+
+wp0=np.zeros((N**2,N**2))
+for j in range(N**2):
+	k=0
+	for i1 in range(3):
+		for j1 in range(3):
+			if (j//N+i1-1>=0) and (j//N+i1-1<N) and (j%N+j1-1>=0) and (j%N+j1-1<N):
+				wp0[j,(j//N+i1-1)*N+j%N+j1-1]=1.
+				k+=1
+	wp0[j]*=1./k
+
+wp=np.zeros((N**2,N**2,N**2))
+for i in range(N**2):
+	for j in range(N**2):
+		if form[1,j//N,j%N]==1:
+			wploc=Wp(i,j)
+			sumloc=0.
+			for i1 in range(3):
+				for j1 in range(3):
+					i11=j//N+i1-1
+					j11=j%N+j1-1
+					if (j11>=0) and (j11<N) and (i11>=0) and (i11<N):
+						wploc[i1,j1]*=w2[j,i11*N+j11]
+						sumloc+=wploc[i1,j1]
+			for i1 in range(3):
+				for j1 in range(3):
+					i11=j//N+i1-1
+					j11=j%N+j1-1
+					if (j11>=0) and (j11<N) and (i11>=0) and (i11<N):
+						wp[i,j,i11*N+j11]=wploc[i1,j1]/sumloc
+        
+
+#print("wp0",wp0)
+wp0=wp[0]
+print("wp[0]",wp[0])
+
+
+dist=np.ones((N**2,N**2),int)
+dist*=-1
+for i in range(N**2):
+    for j in range(N**2):
+        if (form[0,i//N,i%N]==1) and (form[1,j//N,j%N]==1) and (form[1,i//N,i%N]==1):
+            if (abs(i//N-j//N)<=1) and (abs(i%N-j%N)<=1):
+                dist[i,j]=1
+            if (i==j):
+                dist[i,j] = 0
+
+for k in range(N**2):
+    for i in range(N**2):
+        for j in range(N**2):
+                if  (dist[i,k]>=0 and dist[k,j]>=0) and ( dist[i,j]<0  or dist[i,j] > dist[i,k] + dist[k,j]): 
+                    dist[i,j] = dist[i,k] + dist[k,j]
+
+
+
+uload=0
+usafe=1
+uvideo=0
+urecload=0
+T=30
+Titer=2
+Ncop=5#20
+Ncop0=0
+rev_av=np.zeros(Ncop)
+for ncop in range(Ncop0,Ncop):
+    vpos=np.zeros((F,N*N,N*N))*1.
+    vpos1=np.zeros((F,N*N,N*N))*1.
+    vposfin=np.zeros((F,N*N,N*N))*1.
+    sa=np.zeros((F,N*N,N*N), int)
+    sa+=4
+    pref="RLwall_fulltank "   
+    pref+="Ncop"+str(Ncop)+"ncop"+str(ncop+1)+"_N"+str(N)+"F"+str(F)+"beta"+str(beta)+"miop"+str(miop)+"nz"+str(nz)+"gamma"+str(gamma)+"Titer"+str(Titer)+"T"+str(T)+"rw"+str(rw)+"r"+str(R[0])
+    if (uload==0):
+        for t in range(T):
+            print("t",t)
+            for f in range(F):
+                for i in range(N**2):
+                    f2=f#-1+food[i//N,i%N]
+                    if (f2>=F):
+                        f2=F-1
+                    if f2<0:
+                        sa[f,i,:]=4
+                    else:
+                        va=np.dot(vpos[f2],wp[i].transpose())
+                        for j in range(N**2):
+                            vmax=0.
+                            ind=4
+                            for a in range(w1ll[i]):
+                                    v2=va[w1l[i,a],j]
+                                    if (v2>vmax) or (a==0):
+                                        ind=w1a[i,a]
+                                        vmax=v2
+                                    else:
+                                        if (v2==vmax):
+                                            if (np.random.rand()<0.5):
+                                                ind=w1a[i,a]
+                            sa[f,i,j]=ind
+            for iter in range(Titer): 
+                for f in range(F):
+                    for i in range(N**2):
+                        if form[0,i//N,i%N]>0:
+                            f2=f#-1+food[i//N,i%N]
+                            if (f2>=F):
+                                f2=F-1
+                            if f2<0:
+                                vpos[f,i,:]=-1
+                            else:
+                                va=np.dot(vpos[f2],wp[i].transpose())
+                                for j in range(N**2):
+                                    ind=sa[f,i,j]
+                                    v2=va[i+(ind//3-1)*N+(ind%3-1),j]
+                                    vsum=0.
+                                    for k in range(w1ll[i]):
+                                        vsum+=va[i+(w1a[i,k]//3-1)*N+(w1a[i,k]%3-1),j]
+                                    vpos1[f,i,j]=q0(i,j)+gamma*(v2*(1-nz)+vsum*nz/w1ll[i])
+                #for f in range(F):
+                #        vpos[f]=vpos1[f]
+                #        for i in range(N**2):
+                #            vpos[f,i,i]=-1
+            if t==T-2:
+                    for f in range(F):
+                        vposfin[f]=vpos[f]
+
+        print("vposfin")
+        for f in range(F):
+            print("f ",f)
+            for i in range(N**2):
+                print(vposfin[f,i])
+        print("sa")
+        for f in range(F):
+            print("f ",f)
+            for i in range(N**2):
+                print(sa[f,i])
+        if (usafe==1):
+            file = open(pref, "wb")
+            np.save(file, sa) 
+            file.close
+    else:
+            file = open(pref, "rb")
+            sa = np.load(file)
+            file.close
+            for iter in range(20):#100 
+                for f in range(F):
+                    for i in range(N**2):
+                        f2=f#-1+food[i//N,i%N]
+                        if (f2>=F):
+                            f2=F-1
+                        if f2<0:
+                            vpos[f,i,:]=-1
+                        else:
+                            va=np.dot(vpos[f2],wp[i].transpose())
+                            for j in range(N**2):
+                                ind=sa[f,i,j]
+                                v2=va[i+(ind//3-1)*N+(ind%3-1),j]
+                                vpos1[f,i,j]=q0(i,j)+gamma*v2
+                for f in range(F):
+                        vpos[f]=vpos1[f]
+                        for i in range(N**2):
+                            vpos[f,i,i]=-1
+
+
+                for f in range(F):
+                        vposfin[f]=vpos[f]
+
+            print("vposfin",vposfin)
+
+        
+    spos=np.array([F-1,N//2,1,N-1,N-1])
+    s=postos(spos)
+    spos0=stopos(s)
+
+    pi=np.zeros((F*N**2,Na))
+    for i in range(F*N**2): 
+                pa=np.zeros(Na)*1.
+                s=i*N**2+N**2-1#cat at corner
+                na=w1ll[(s%N**4)//N**2]
+                pa[sa[s//N**4,(s%N**4)//N**2,s%N**2]]+=1-nz
+                #print("i,a",i,sa[s//N**4,(s%N**4)//N**2,s%N**2],sa[0,i,24])
+                for j in range(na):
+                        pa[w1a[(s%N**4)//N**2,j]]+=nz/na
+                pi[i,:]=pa[:]
+
+    print("pi",pi)
+
+    Viter=10#0
+    v=np.zeros((F*N**2))
+    for i in range(F*N**2): 
+            v[i]=R[i]
+    print("v",v)
+    for iter in range(Viter):
+            v2=np.zeros((F*N**2))
+            for i in range(F*N**2): 
+                v2[i]=R[i]
+                pa=np.zeros(Na)*1.
+                pa[:]=pi[i,:]
+                s=i*N**2+N**2-1#cat at corner
+                for a in range(Na):
+                           # for a in range(w1ll[i]):
+                           #         v2=v[w1l[i,a]]
+                    if pa[a]>0:
+                        ls,ps=nexts(s,a)
+                        #val=np.zeros((len(ls)))
+                        #for j in range(len(ls)):
+                            #val[j]=v[ls[j]//N**2]
+                        print("i,a,ls,val",i,a,ls[0]//N**2,v[ls[0]//N**2])
+                        v2[i]+=pa[a]*v[ls[0]//N**2]#np.dot(ps,val)
+            v[:]=v2[:]
+            print("v",v)
+    v*=1./Viter
+    print("ncop,v",ncop,v) 
+    rev_av[ncop]=v[N**2-1]           
+
+    #file = open("rev_av_valit_"+str(Viter)+"_"+pref+"arg"+str(bet0)+"_"+str(betm), "wb")
+    #np.save(file, rev_av[ialpha])
+    #file.close
+
+    #col=str(0.9*ialpha/nalpha)
+    #pl.plot(arf,rev_av[ialpha], color=col)
+
+print("rev_av",rev_av)
+
+rl_rev_av=np.mean(rev_av)
+rl_rev_std=np.std(rev_av)/np.sqrt(len(rev_av))
+
+print("rl_rev_av,rl_rev_std",rl_rev_av,rl_rev_std)
+
+file = open("revt_rl_valit_"+str(Viter)+"_"+pref, "wb")
+np.save(file, rev_av)
+file.close
+
+file = open("rl_rev_av_valit_"+str(Viter)+"_"+pref, "wb")
+np.save(file, rl_rev_av)
+file.close
+
+file = open("rl_rev_std_valit_"+str(Viter)+"_"+pref, "wb")
+np.save(file, rl_rev_std)
+file.close
+
+#pl.xlabel(r'$\beta$',size=20)#r'$\beta$'
+#pl.ylabel('r',size=20)
+#pl.show()
+ 
